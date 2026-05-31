@@ -1,0 +1,44 @@
+---
+is-thesis: true # 卒論用フォーマットの適用
+year: 20XX年度
+title: 題目
+subtitle: 副題
+department: XX学部　第X類
+student_id: XXXXXXXX
+author: 学生氏名
+supervisor: 指導教員氏名
+date: \warekicustomdate{}
+version: v0.1
+bibliography: 10.bib/thesis.bib
+bibstyle: mybibstyle # pdf形式の場合のスタイル指定
+# 優先順位(左から順に優先してファイルを探しに行きます):
+# 1.カレントディレクトリ(.) ＞ 2.モード専用テンプレート ＞ 3.共通テンプレート
+csl: harvard # docx形式の場合のスタイル指定、[harvard, mla]等
+referenceall: true
+toc: True
+toc-title: 目次
+biblio-title: 文献目録
+has-frontmatter: true
+abstract: | 
+    本論文は、……
+    (ここに要約の本文を書く)
+thesis_files:
+  - 01.intro/introduction.txt
+  - 04.body/research1.txt
+  - 04.body/research2.txt
+  - 04.body/research3.txt
+  - 07.discus/discussion.txt
+  - 08.conc/conclusion.txt
+# 謝辞と補遺は templates/MyDefaults.yaml で指定してください
+# 参考:経済学部の場合の構成例
+#thesis_files:
+# - 01.intro/introduction.txt
+# - 02.theory/model.txt
+# - 03.method/data.txt
+# - 04.body/results.txt
+# - 07.discus/discussion.txt
+# - 08.conc/conclusion.txt
+natSections: false
+secPrefix: ""
+secInfix: ""
+---

@@ -1,0 +1,3 @@
+# テーマB {#sec:theme2}
+
+@sec:theme1 章を参照

@@ -1,0 +1,4 @@
+from: markdown-auto_identifiers
+number-sections: true
+include-before-body: 09.other/acknowledgements.txt
+include-after-body: 09.other/appendix.txt

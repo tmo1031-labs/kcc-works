@@ -1,0 +1,9 @@
+# テーマA {#sec:theme1}
+
+## Aの細分化1
+
+[序論](#sec:intro) の @sec:background 節および @sec:historical_review 節を参照
+
+## Aの細分化2
+
+## Aの細分化3
