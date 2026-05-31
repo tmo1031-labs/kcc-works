@@ -13,10 +13,10 @@ Pandoc と LaTeX (LuaLaTeX/uplatex) を使用して、
 │   ├── compile.sh         # 変換を実行するコアスクリプト
 │   └── templates/         # ここに変換用テンプレートを置く
 │       ├── default.latex  # LaTeXファイル変換用テンプレート
-│       ├── jecon.bst      # LaTeXファイル変換時の文献表スタイル
 │       ├── default.docx   # WORDファイル変換用テンプレート
 │       ├── harvard.csl    # WORDファイル変換時の文献表スタイル(ハーバード式)
 │       ├── mla.csl        # WORDファイル変換時の文献表スタイル(MLA式)
+│       ├── mybibstyle.sty # 文献表のスタイルファイル
 │       └── MyDefaults.yaml   # 変換スクリプトのオプションを指定する設定ファイル
 ├── subjects/               # 科目レポート等の置き場
 │   ├── sample/             # サンプルレポート
@@ -31,7 +31,7 @@ Pandoc と LaTeX (LuaLaTeX/uplatex) を使用して、
 │   ├── 99.bib/             # 文献表のBibTeX置き場
 │   └── templates/          # [変換用テンプレートを科目と卒論で別ける場合の置き場]
 ├── Dockerfile              # 仮想環境構築の設定ファイル
-└── run.sh                  # 仮想環境での変換実行スクリプト
+└── compile.sh              # 仮想環境での変換実行スクリプト
 ```
 
 ## 🛠️ 事前準備
@@ -52,7 +52,6 @@ Pandoc と LaTeX (LuaLaTeX/uplatex) を使用して、
    2. 上部のバーの「Githubから複製」を選択、"tmo1031-labs/kcc-works"を検索して選択。
    3. ローカルの保存先のフォルダを選択し、「リポジトリの宛先として選択」を押す。
    4. ローカルのリポジトリができる。
-
 3. リモートのプッシュ先を変える。
    1. VSCodeでローカルリポジトリを開き、ターミナルウィンドウを表示させる。
    (メニューバー -> 表示 -> ターミナル を押す)
@@ -129,6 +128,8 @@ docker build -t my-pandoc .
 
 #### Github Actions での実行環境
 
+1. 卒論のバージョン管理用に mainブランチに v0.1 などのタグを打っておくと便利です
+
 ## 🚀 使い方
 
 コンパイルはすべてルートディレクトリで ./compile.sh を実行するだけです。
@@ -160,7 +161,7 @@ docker build -t my-pandoc .
 ./compile.sh tex
 ```
 
-1. PDF同士の結合
+3. PDF同士の結合
 卒論のPDFと、卒論構想のPDFがあれば、2つを結合して1つのPDFにまとめられます。
 
 ```bash
