@@ -1,85 +1,283 @@
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesPackage{mybibstyle}
+\RequirePackage{xstring} % 文字列置換のために必須
 
 % ==============================================================================
 % 🛠️ 文献スタイル切り替えスイッチ
 % ==============================================================================
-%   - 1 : APA 7th スタイル
-%   - 0 : 標準的なハーバード式（著者名-年号）
-\def\UseAPAStyle{1} %
+%   - 0 : 標準的なハーバード式（著者名 年号）
+%   - 1 : APA 7th っぽい見た目のフォーマット
+%   - 2 : MLA 9th っぽい見た目のフォーマット（本文は著者名とページのみ、年は巻末最後）
+%   - 3 : MLA 9th
+\newcommand{\BibStyleChoice}{0} %
 
 % ==============================================================================
-% 参考文献パッケージ（biblatex）の自動分岐読み込み
+% 参考文献パッケージ（スタイルに応じてベース自体を動的に切り替える）
 % ==============================================================================
-\if\UseAPAStyle1
-  \usepackage[backend=biber, style=apa, natbib=true]{biblatex}
-\else
-  \usepackage[
-    backend=biber, style=authoryear, sorting=nyt, uniquename=init,
-    giveninits=true, natbib=true, dashed=false, maxcitenames=2,
-    maxbibnames=99, mergedate=basic
+\ifnum\BibStyleChoice=3
+  % 【完全MLA】biblatex-mlaパッケージをそのまま使用する
+  \RequirePackage[
+    backend=biber,
+    style=mla,                 % 厳密なMLAスタイル（自動でフルネームや並び替えを制御）
+    natbib=true, 
+    maxbibnames=99
   ]{biblatex}
-\fi
+\else
+  \ifnum\BibStyleChoice=2
+    % 【MLA風】年は最後に出る「著者名-タイトル」スタイルをベースにする
+    \RequirePackage[
+      backend=biber,
+      style=authortitle,
+      sorting=nty,               % MLAの標準：著者 ➔ タイトル ➔ 年 順
+      uniquename=init,
+      giveninits=false,          % MLAはファーストネームを略さずフルネームで書くため
+      natbib=true, dashed=false, maxcitenames=2, maxbibnames=99
+    ]{biblatex}
+    % --- Choice=2用のMLA風カスタマイズマクロ ---
+    % 文中引用（Cite）のときだけ、タイトルを表示させない
+    \AtEveryCitekey{\clearfield{title}\clearfield{extratitle}}
+    % 著者名とページ数の間の区切りを半角スペースにする
+    \DeclareDelimFormat{postnotedelim}{\addspace}
+    % -----------------------------------------
+  \else
+    % 【ハーバード・APA用】「著者名-年号」スタイルをベースにする
+    \RequirePackage[
+      backend=biber,
+      style=authoryear,
+      sorting=nyt,
+      uniquename=init,
+      giveninits=true,           % 欧米名はイニシャル表記にする
+      natbib=true, dashed=false, maxcitenames=2, maxbibnames=99,
+      mergedate=basic
+    ]{biblatex}
+    % 1. langid={japanese} の文献だけ、動的に giveninits=true（イニシャル化）を解除する
+    \DeclareSourcemap{
+      \maps[datatype=bibtex]{
+        \map{
+          \step[fieldsource=langid, match=japanese, final]
+          \step[fieldset=options, fieldvalue={giveninits=false}]
+        }
+      }
+    }
+  \fi  % Choice=2 の if を閉じる
+\fi  % Choice=3 の if を閉じる
+
+% ==============================================================================
+% 🌍 🌟【全スタイル共通】日本語文献の姓名連結（自動出し分け＆コンマ区切り強化版）
+% ==============================================================================
+% 日本語文献専用の名前フォーマット（日本人は密着、欧米人はコンマ＋スペース、複数人はコンマ区切り）
+\DeclareNameFormat{japanese-name}{%
+  \usebibmacro{name:delim}{\nameptr}% 複数人並んだ時の区切り（コンマ）を自動出力
+  \namepartfamily
+  % 💡 \directlatex ではなく \directlua に修正します
+  \directlua{% 
+    local f = "\luaescapestring{\namepartfamily}"
+    local g = "\luaescapestring{\namepartgiven}"
+    if string.find(f, "[A-Za-z]") or string.find(g, "[A-Za-z]") then
+      tex.print([[\string\addcomma\string\space]])
+    end
+  }%
+  \namepartgiven
+  \usebibmacro{name:andothers}%
+}
+
+\AtEveryBibitem{%
+  \iffieldequalstr{langid}{japanese}{%
+    \DeclareNameAlias{author}{japanese-name}% 著者
+    \DeclareNameAlias{editor}{japanese-name}% 先頭の編集者（編著など）
+    \DeclareNameAlias{translator}{japanese-name}% 先頭の翻訳者
+    \DeclareNameAlias{byeditor}{japanese-name}% 文中の編集者（「〜〜 編」の部分）
+    \DeclareNameAlias{bytranslator}{japanese-name}% 文中の翻訳者（「〜〜 訳」の部分）
+  }{}%
+}
+
+\AtEveryCitekey{%
+  \iffieldequalstr{langid}{japanese}{%
+    \DeclareNameAlias{author}{japanese-name}%
+    \DeclareNameAlias{editor}{japanese-name}%
+    \DeclareNameAlias{translator}{japanese-name}%
+    \DeclareNameAlias{byeditor}{japanese-name}%
+    \DeclareNameAlias{bytranslator}{japanese-name}%
+  }{}%
+}
+% ==============================================================================
+
+\RequirePackage{regexpatch} % マクロのピンポイント修正用（In:消去に必須）
 
 \renewcommand{\bibfont}{\small} 
 \setlength{\bibhang}{2\zw}       
 \setlength{\bibitemsep}{4pt}    
 
 % ==============================================================================
-% 1. 辞書文字列の完全強制上書き
+% 共通のフォーマット設定（和書と洋書の自動出し分け）
 % ==============================================================================
 \AtBeginDocument{%
-  % 英語辞書の「Trans.」を日本語の「訳」に強制リネームします
-  \DefineBibliographyStrings{american}{%
-    translator = {{Translator}{訳}},%
-  }%
-  \DefineBibliographyStrings{english}{%
-    translator = {{Translator}{訳}},%
-  }%
-}
+  % ==============================================================================
+  % 🌟 日本人の名前が複数並んだとき、最後も含めてすべてコンマ（, ）で区切る設定
+  % ==============================================================================
+  \DeclareDelimFormat{multinamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  \DeclareDelimFormat{finalnamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  \DeclareDelimFormat[bib]{multinamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  \DeclareDelimFormat[bib]{finalnamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  \DeclareDelimFormat[cite]{multinamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  \DeclareDelimFormat[cite]{finalnamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  \DeclareDelimFormat[bytranslator]{multinamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  \DeclareDelimFormat[bytranslator]{finalnamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  \DeclareDelimFormat[byeditor]{multinamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  \DeclareDelimFormat[byeditor]{finalnamedelim}{\iffieldequalstr{langid}{japanese}{\addcomma\space}{\addspace\bibstring{and}\addspace}}
+  % ==============================================================================
+  
+  % --- 1. 書名・雑誌名のフォーマット（和書の『』「」対応、洋書論文の引用符対応） ---
+  \DeclareFieldFormat[article,incollection]{title}{\iffieldequalstr{langid}{japanese}{「#1」}{\mkbibquote{#1}}}
+  \DeclareFieldFormat[book]{title}{\iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}}
+  \DeclareFieldFormat[book,incollection,article]{booktitle}{\iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}}
+  \DeclareFieldFormat[book,incollection,article]{journaltitle}{\iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}}
+  \DeclareFieldFormat[book,incollection,article]{maintitle}{\iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}}
 
-% ==============================================================================
-% 2. 書名・雑誌名のフォーマット（共通）
-% ==============================================================================
-\AtBeginDocument{%
-  \makeatletter
-  \DeclareFieldFormat[article,incollection]{title}{%
-    \iffieldequalstr{langid}{japanese}{「#1」}{#1}%
-  }
-  \DeclareFieldFormat[book]{title}{%
-    \iffieldequalstr{langid}{japanese}{『#1』}{#1}%
-  }
-  \DeclareFieldFormat[book,incollection,article]{booktitle}{%
-    \iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}%
-  }
-  \DeclareFieldFormat[book,incollection,article]{journaltitle}{%
-    \iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}%
-  }
-  \DeclareFieldFormat[book,incollection,article]{maintitle}{%
-    \iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}%
-  }
+  % --- 2. 各スタイル固有のカスタマイズ分岐 ---
+  \ifnum\BibStyleChoice=2
+    % ==========================================================================
+    % 📜 MLA 9th 風の設定
+    % ==========================================================================
+    \DeclareDelimFormat{postnotedelim}{\addspace}
+    \DeclareFieldFormat{postnote}{#1}
+    \DeclareFieldFormat{multipostnote}{#1}
+    \DeclareFieldFormat[book,incollection,article]{pages}{#1} 
 
-  \DeclareDelimFormat{multinamedelim}{%
-    \iffieldequalstr{langid}{japanese}{,}{\addspace\bibstring{and}\addspace}%
-  }
-  \DeclareDelimFormat{finalnamedelim}{%
-    \iffieldequalstr{langid}{japanese}{,}{\addspace\bibstring{and}\addspace}%
-  }
-
-  % ハーバード用マクロ設定（APA時は無視されます）
-  \ifnum\UseAPAStyle=0
-    \newcommand{\JapaneseTranslatorCore}{%
+    \renewbibmacro*{bytranslator+others}{%
       \ifnameundef{translator}{}
-        {%
-          \iffieldequalstr{langid}{japanese}
-            {\printnames{translator}\addspace 訳\setunit{\nameyeardelim}}
-            {\printtext{\bibstring{bytranslator}\setunit{\addspace}\printnames{translator}}}%
-        }%
+        {\iffieldequalstr{langid}{japanese}
+           {\nopunct\addcomma\space
+            \sbox0{\printnames{translator}}%
+            \StrSubstitute{\usebox0}{and}{,}\addspace 訳}
+           {\nopunct\addcomma\space\bibstring{bytranslator}\addspace\printnames{translator}}%
+         \clearname{translator}}%
     }
-    \ifcsundef{abx@macro@byeditor+others}{}{\renewbibmacro*{byeditor+others}{\JapaneseTranslatorCore\clearname{translator}}}
-    \ifcsundef{abx@macro@bytranslator+others}{}{\renewbibmacro*{bytranslator+others}{\JapaneseTranslatorCore\clearname{translator}}}
-    \ifcsundef{abx@macro@bytranslator+everything}{}{\renewbibmacro*{bytranslator+everything}{\JapaneseTranslatorCore\clearname{translator}}}
-    \ifcsundef{abx@macro@bytranslator}{}{\renewbibmacro*{bytranslator}{\JapaneseTranslatorCore\clearname{translator}}}
+
+    \renewbibmacro*{note+pages}{%
+      \iffielndef{note}
+        {\setunit{\addcolon\space}%
+         \printfield{pages}}
+        {\printfield{note}%
+         \setunit{\addcomma\space}%
+         \printfield{pages}}}
+
+    \renewbibmacro*{chapter+pages}{%
+      \iffielndef{chapter}
+        {\setunit{\addcolon\space}%
+         \printfield{pages}}
+        {\printfield{chapter}%
+         \setunit{\addcomma\space}%
+         \printfield{pages}}%
+      \newunit}
+
+  \else
+    \ifnum\BibStyleChoice=1
+      % ==========================================================================
+      % ✨ APA 7th 風の設定
+      % ==========================================================================
+      \DeclareDelimFormat{nameyeardelim}{\addcomma\space}
+      \DeclareDelimFormat{nonameyeardelim}{\addcomma\space}
+      
+      \DeclareFieldFormat[article]{volume}{\mkbibitalic{#1}}
+      \DeclareFieldFormat[article]{number}{\mkbibparens{#1}}
+      \DeclareFieldFormat[article]{pages}{#1}
+      \renewbibmacro*{volume+number+eid}{\printfield{volume}\printfield{number}\setunit{\addcomma\space}\printfield{eid}}
+      
+      \renewbibmacro*{bytranslator+others}{%
+        \ifnameundef{translator}{}
+          {\iffieldequalstr{langid}{japanese}
+             {\nopunct\addspace
+              \sbox0{\printnames{translator}}%
+              \printtext[parens]{\StrSubstitute{\usebox0}{and}{,}\addspace 訳}}
+             {\nopunct\addspace\printtext[parens]{\printnames{translator},\addspace Trans.}}%
+           \clearname{translator}}%
+      }
+    \else
+      % ==========================================================================
+      % ☕ 標準ハーバード式の設定
+      % ==========================================================================
+      \DeclareDelimFormat{nameyeardelim}{\addspace}
+      \DeclareDelimFormat{nonameyeardelim}{\addspace}
+      
+      \renewbibmacro*{bytranslator+others}{%
+        \ifnameundef{translator}{}
+          {\iffieldequalstr{langid}{japanese}
+             {\nopunct\addcomma\space
+              \sbox0{\printnames{translator}}%
+              \StrSubstitute{\usebox0}{and}{,}\addspace 訳}
+             {\nopunct\addcomma\space\printtext{\bibstring{bytranslator}\addspace\printnames{translator}}}%
+           \clearname{translator}}%
+      }
+    \fi
   \fi
-  \makeatother
+} %
+
+% ==============================================================================
+% 【共通パッチ】雑誌論文（@article）、論文集収録論文（@incollection）用の「. In:」完全消去パッチ
+% ==============================================================================
+\xpatchbibdriver{article}
+  {\usebibmacro{in:}}
+  {\iffieldequalstr{langid}{japanese}{\nopunct}{\usebibmacro{in:}}}
+  {}
+  {}
+\xpatchbibdriver{incollection}
+  {\usebibmacro{in:}}
+  {\iffieldequalstr{langid}{japanese}{\nopunct}{\usebibmacro{in:}}}
+  {}
+  {}
+
+% ==============================================================================
+% 🌟 【共通パッチ】和書の「Ed. by XXX」を「XXX 編」に書き換える設定（完全確定版）
+% ==============================================================================
+\xpatchbibdriver{incollection}
+  {\usebibmacro{byeditor+others}%
+   \newunit\newblock}
+  {\iffieldequalstr{langid}{japanese}
+     {\nopunct\printnames{editor}\addspace 編\newunit\newblock} 
+     {\usebibmacro{byeditor+others}%                          
+      \newunit\newblock}}
+  {}
+  {}
+
+% ==============================================================================
+% 🌟 【共通パッチ】和書の最先頭の「, ed.」「, eds.」を「 編」に書き換える設定（超確定版）
+% ==============================================================================
+\xpatchbibmacro{author/editor+others/translator+others}
+  {\printlist{institution}%
+   \setunit{\addcomma\space}%
+   \usebibmacro{editor+othersstrg}}
+  {\printlist{institution}%
+   \iffieldequalstr{langid}{japanese}
+     {\nopunct\addspace 編} 
+     {\setunit{\addcomma\space}\usebibmacro{editor+othersstrg}}} 
+  {}
+  {}
+
+% ==============================================================================
+% 🌟 【共通パッチ】和書の最先頭の「, ed.」「, eds.」を「 編」に書き換える設定（安全バックアップ版）
+% ==============================================================================
+\AtBeginDocument{%
+  \letbibmacro{orig:editor}{editor}
+  \letbibmacro{orig:editorstrg}{editorstrg}
+  \letbibmacro{orig:editor+othersstrg}{editor+othersstrg}
+
+  \renewbibmacro*{editor}{%
+    \iffieldequalstr{langid}{japanese}
+      {\ifnameundef{editor}
+         {}
+         {\printnames{editor}\nopunct\addspace 編%
+          \clearname{editor}%
+          \setunit{\printdelim{nametitledelim}}\newblock}}
+      {\usebibmacro{orig:editor}}} 
+
+  \renewbibmacro*{editorstrg}{%
+    \iffieldequalstr{langid}{japanese}
+      {\nopunct\addspace 編}
+      {\usebibmacro{orig:editorstrg}}} 
+
+  \renewbibmacro*{editor+othersstrg}{%
+    \iffieldequalstr{langid}{japanese}
+      {\nopunct\addspace 編}
+      {\usebibmacro{orig:editor+othersstrg}}} 
 }
