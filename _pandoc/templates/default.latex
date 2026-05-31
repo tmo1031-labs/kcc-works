@@ -111,6 +111,22 @@ $endif$
 
 \makeatletter
 
+% ==============================================================================
+% 🔢 註番号を丸カッコ (1) (2) に強制上書きする設定
+% ==============================================================================
+% 1. カウンタが出力する文字の基本形式を「(数字)」にする
+\renewcommand{\thefootnote}{(\arabic{footnote})}
+\renewcommand{\theendnote}{(\arabic{endnote})}
+\setcounter{footnote}{0}
+\setcounter{endnote}{0}
+
+% 2. 【重要】本文中の右上につく合印（上付き数字）も確実にカッコ付きにする
+% bxjsbook (pLaTeX/UpLaTeX/XeLaTeX) の標準合印マクロをカッコ付きで上書き
+\DeclareRobustCommand*{\@makefnmark}{%
+  \hbox{\@textsuperscript{\normalfont\thefootnote}}%
+}
+% ==============================================================================
+
 $if(is-thesis)$
 % 論文モード（is-thesis: true）の場合：chapter を使用
 \renewcommand{\thechapter}{\arabic{chapter}}
@@ -140,7 +156,7 @@ $endif$
 
 % 後注・脚注の書式変更
 \renewcommand{\notesname}{本文註}
-\patchcmd{\enoteformat}{1.8em}{0pt}{}{}
+\patchcmd{\enoteformat}{1.8em}{2.0em}{}{}
 
 % 画像の最大幅制御マクロ
 \def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
