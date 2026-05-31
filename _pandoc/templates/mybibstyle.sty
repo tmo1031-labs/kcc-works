@@ -1,0 +1,85 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{mybibstyle}
+
+% ==============================================================================
+% 🛠️ 文献スタイル切り替えスイッチ
+% ==============================================================================
+%   - 1 : APA 7th スタイル
+%   - 0 : 標準的なハーバード式（著者名-年号）
+\def\UseAPAStyle{1} %
+
+% ==============================================================================
+% 参考文献パッケージ（biblatex）の自動分岐読み込み
+% ==============================================================================
+\if\UseAPAStyle1
+  \usepackage[backend=biber, style=apa, natbib=true]{biblatex}
+\else
+  \usepackage[
+    backend=biber, style=authoryear, sorting=nyt, uniquename=init,
+    giveninits=true, natbib=true, dashed=false, maxcitenames=2,
+    maxbibnames=99, mergedate=basic
+  ]{biblatex}
+\fi
+
+\renewcommand{\bibfont}{\small} 
+\setlength{\bibhang}{2\zw}       
+\setlength{\bibitemsep}{4pt}    
+
+% ==============================================================================
+% 1. 辞書文字列の完全強制上書き
+% ==============================================================================
+\AtBeginDocument{%
+  % 英語辞書の「Trans.」を日本語の「訳」に強制リネームします
+  \DefineBibliographyStrings{american}{%
+    translator = {{Translator}{訳}},%
+  }%
+  \DefineBibliographyStrings{english}{%
+    translator = {{Translator}{訳}},%
+  }%
+}
+
+% ==============================================================================
+% 2. 書名・雑誌名のフォーマット（共通）
+% ==============================================================================
+\AtBeginDocument{%
+  \makeatletter
+  \DeclareFieldFormat[article,incollection]{title}{%
+    \iffieldequalstr{langid}{japanese}{「#1」}{#1}%
+  }
+  \DeclareFieldFormat[book]{title}{%
+    \iffieldequalstr{langid}{japanese}{『#1』}{#1}%
+  }
+  \DeclareFieldFormat[book,incollection,article]{booktitle}{%
+    \iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}%
+  }
+  \DeclareFieldFormat[book,incollection,article]{journaltitle}{%
+    \iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}%
+  }
+  \DeclareFieldFormat[book,incollection,article]{maintitle}{%
+    \iffieldequalstr{langid}{japanese}{『#1』}{\mkbibitalic{#1}}%
+  }
+
+  \DeclareDelimFormat{multinamedelim}{%
+    \iffieldequalstr{langid}{japanese}{,}{\addspace\bibstring{and}\addspace}%
+  }
+  \DeclareDelimFormat{finalnamedelim}{%
+    \iffieldequalstr{langid}{japanese}{,}{\addspace\bibstring{and}\addspace}%
+  }
+
+  % ハーバード用マクロ設定（APA時は無視されます）
+  \ifnum\UseAPAStyle=0
+    \newcommand{\JapaneseTranslatorCore}{%
+      \ifnameundef{translator}{}
+        {%
+          \iffieldequalstr{langid}{japanese}
+            {\printnames{translator}\addspace 訳\setunit{\nameyeardelim}}
+            {\printtext{\bibstring{bytranslator}\setunit{\addspace}\printnames{translator}}}%
+        }%
+    }
+    \ifcsundef{abx@macro@byeditor+others}{}{\renewbibmacro*{byeditor+others}{\JapaneseTranslatorCore\clearname{translator}}}
+    \ifcsundef{abx@macro@bytranslator+others}{}{\renewbibmacro*{bytranslator+others}{\JapaneseTranslatorCore\clearname{translator}}}
+    \ifcsundef{abx@macro@bytranslator+everything}{}{\renewbibmacro*{bytranslator+everything}{\JapaneseTranslatorCore\clearname{translator}}}
+    \ifcsundef{abx@macro@bytranslator}{}{\renewbibmacro*{bytranslator}{\JapaneseTranslatorCore\clearname{translator}}}
+  \fi
+  \makeatother
+}

@@ -1,0 +1,227 @@
+name: run_compile
+on:
+  push:
+    paths:
+      - '**.md'
+      - '**.txt'
+      - '**.latex'
+      - '**.bib'
+      - '**.sty'
+      - '.github/workflows/run_compile.yaml'
+      - '**/compile.sh'
+
+permissions:
+  contents: write
+
+jobs:
+  build-pdf-job:
+    runs-on: ubuntu-latest
+    container:
+      image: paperist/alpine-texlive-ja:latest
+
+    steps:
+      - name: Install git
+        run: apk add --no-cache git
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory '*'
+
+      - name: set environment variable
+        shell: bash
+        run: |
+          echo "=== Loading repository env.sh ==="
+          ENV_SH_PATH="_pandoc/env.sh"
+          
+          if [ -f "$ENV_SH_PATH" ]; then
+            source "$ENV_SH_PATH"
+            echo "✅ env.sh を正常にロードしました。"
+          else
+            echo "❌ Error: env.sh が見つかりません: $ENV_SH_PATH" >&2
+            exit 1
+          fi
+          
+          echo "THESIS_DIR=${THESIS_DIR:-thesis}" >> $GITHUB_ENV
+          echo "DIR_CORE=${DIR_CORE:-00.core}" >> $GITHUB_ENV
+          echo "FILE_THESIS_CONF=${FILE_THESIS_CONF:-thesis.txt}" >> $GITHUB_ENV
+          echo "FILE_THESIS_OUTPUT=${FILE_THESIS_OUTPUT:-thesis}" >> $GITHUB_ENV
+
+      - name: Detect latest tag and Fetch history
+        run: |
+          LATEST_TAG=$(git ls-remote --tags --sort='v:refname' origin 'refs/tags/v*' | tail -n1 | sed -e 's/.*refs\/tags\///' -e 's/\^{}//')
+          
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No tags found. Using default values."
+            echo "TARGET_TAG=v0.0" >> $GITHUB_ENV
+            echo "HAS_TAG=false" >> $GITHUB_ENV
+            git fetch --unshallow || true
+          else
+            echo "Detected latest tag: $LATEST_TAG"
+            echo "TARGET_TAG=$LATEST_TAG" >> $GITHUB_ENV
+            echo "HAS_TAG=true" >> $GITHUB_ENV
+            
+            git fetch --depth=1 origin refs/tags/"$LATEST_TAG":refs/tags/"$LATEST_TAG"
+            git fetch --shallow-exclude="$LATEST_TAG" origin "${{ github.ref_name }}"
+          fi
+
+      - name: Calculate commits and update file
+        run: |
+          echo "Target Tag: $TARGET_TAG"
+          
+          if [ "$HAS_TAG" = "true" ]; then
+            COUNT=$(git rev-list --count "$TARGET_TAG"..HEAD -- "${{ env.THESIS_DIR }}")
+          else
+            COUNT=$(git rev-list --count HEAD -- "${{ env.THESIS_DIR }}")
+          fi
+          
+          echo "Calculated count: $COUNT"
+          echo "COMMIT_COUNT=$COUNT" >> $GITHUB_ENV
+          
+          echo "NEW_VERSION=${TARGET_TAG}.${COUNT}" >> $GITHUB_ENV
+          NEW_VERSION="${TARGET_TAG}.${COUNT}"
+
+          TARGET_CONF="${{ env.THESIS_DIR }}/${{ env.DIR_CORE }}/${{ env.FILE_THESIS_CONF }}"
+          
+          if [ -f "$TARGET_CONF" ]; then
+            echo "✅ 設定ファイルを発見しました。バージョン情報を $NEW_VERSION に更新します。"
+            sed -i -e "s/^version:.*/version: ${NEW_VERSION}/g" "$TARGET_CONF"
+          else
+            echo "⚠️ Warning: 設定ファイルが見つからないため、バージョンの書き換えをスキップします: $TARGET_CONF"
+          fi
+
+      - name: Install Pandoc & Pin-point TeX packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          type jq >/dev/null 2>&1 || apk add --no-cache jq
+          type curl >/dev/null 2>&1 || apk add --no-cache curl
+
+          tlmgr option repository https://mirror.ctan.org/systems/texlive/tlnet
+          tlmgr install biber biblatex-apa csquotes logreq etoolbox xstring || echo "Warning: tlmgr install failed"
+
+          # 💡 認証ヘッダーを付けて API 制限を回避。リトライも仕込んで堅牢化
+          CROSSREF_JSON=$(curl -s -H "Authorization: token $GITHUB_TOKEN" --retry 3 https://api.github.com/repos/lierdakil/pandoc-crossref/releases/latest)
+          
+          # 💡 jq エラーを防ぐため「// empty」を配置
+          DOWNLOAD_URL=$(echo "$CROSSREF_JSON" | jq -r '.assets[] // empty | select(.name | test("linux"; "i") and test("\\.tar\\.xz$") and test("x64|amd64"; "i")) | .browser_download_url' | head -n 1)
+          echo "Downloading pandoc-crossref from: $DOWNLOAD_URL"
+
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+            echo "Error: Failed to find valid linux asset URL for pandoc-crossref."
+            exit 1
+          fi
+
+          curl -L "$DOWNLOAD_URL" -o pandoc-crossref.tar.xz
+          tar -xJf pandoc-crossref.tar.xz
+          BINARY_PATH=$(find . -name "pandoc-crossref" -type f | head -n 1)
+          mv "$BINARY_PATH" /usr/local/bin/
+          chmod +x /usr/local/bin/pandoc-crossref
+
+          # 💡 body が null の場合のクラッシュを防ぐガード
+          PANDOC_VER=$(echo "$CROSSREF_JSON" | jq -r '.body // empty' | grep -oE "pandoc [0-9.]+" | head -n 1 | awk '{print $2}')
+          echo "Strictly compatible Pandoc version required by crossref: $PANDOC_VER"
+
+          if [ -z "$PANDOC_VER" ] || [ "$PANDOC_VER" = "null" ]; then
+            echo "Error: Could not determine compatible Pandoc version. Falling back to default."
+            PANDOC_VER="3.1.2"
+          fi
+          
+          echo "Installing exact match Pandoc ${PANDOC_VER}..."
+          curl -L "https://github.com/jgm/pandoc/releases/download/${PANDOC_VER}/pandoc-${PANDOC_VER}-linux-amd64.tar.gz" -o pandoc.tar.gz
+          tar -xzf pandoc.tar.gz --strip-components 1 -C /usr/local/
+
+      - name: Check versions
+        run: |
+          pandoc --version
+          pandoc-crossref --version
+          biber --version
+
+      - name: add executable permission
+        run: chmod +x compile.sh
+        working-directory: ${{ github.workspace }}
+      
+      - name: Markdown to pdf
+        shell: bash
+        run: |
+          NEW_VERSION="${TARGET_TAG}.${COMMIT_COUNT}"
+          echo "=== Detecting changed files ==="
+          RAW_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD~1 HEAD -- '**/*.md' '**/*.txt' || true)
+          CLEAN_RAW_FILES=$(echo "$RAW_FILES" | tr ' ' '\n' | grep -v '^$' || true)
+          THESIS_PURE_NAME=$(basename "${{ env.THESIS_DIR }}")
+          BASE_FILTERED=$(echo "$CLEAN_RAW_FILES" | grep -E -v "^${THESIS_PURE_NAME}[^/]*/" || true)
+          ESCAPED_CORE=$(echo "${DIR_CORE}" | sed 's/\./\\./g')
+          RESCUED_FILES=$(echo "$CLEAN_RAW_FILES" | grep -E "^${THESIS_PURE_NAME}[^/]*/${ESCAPED_CORE}/[^/]+$" || true)
+          ALL_FILES=$(echo -e "${BASE_FILTERED}\n${RESCUED_FILES}" | grep -v '^$' | tr '\n' ' ' | xargs || true)
+          
+          FINAL_PDF_LIST=""
+          FINAL_DOCX_LIST=""
+
+          if [ -n "$ALL_FILES" ]; then
+            echo "All detected files: $ALL_FILES"
+            ./compile.sh $ALL_FILES all
+            
+            echo "IS_COMPILE_EXECUTED=true" >> $GITHUB_ENV
+            
+            for file in $ALL_FILES; do
+              pdf_path="${file%.*}.pdf"
+              if [ -f "$pdf_path" ]; then FINAL_PDF_LIST="${FINAL_PDF_LIST}${pdf_path}"$'\n'; fi
+            done
+            for file in $ALL_FILES; do
+              docx_path="${file%.*}.docx"
+              if [ -f "$docx_path" ]; then FINAL_DOCX_LIST="${FINAL_DOCX_LIST}${docx_path}"$'\n'; fi
+            done
+          else
+            echo "Running standard thesis compile..."
+            ./compile.sh
+          fi
+          ORIGINAL_PDF="${THESIS_DIR}/${DIR_CORE}/${FILE_THESIS_OUTPUT}.pdf"
+          NEW_PDF="${THESIS_DIR}/${DIR_CORE}/${FILE_THESIS_OUTPUT}-${NEW_VERSION}.pdf"
+          if [ -f "$ORIGINAL_PDF" ]; then
+            echo "Renaming Thesis PDF to: $NEW_PDF"
+            mv "$ORIGINAL_PDF" "$NEW_PDF"
+            # 💡 既存の科目PDFリストの後ろに、リネームした論文PDFを「追記（連結）」する
+            FINAL_PDF_LIST="${FINAL_PDF_LIST}${NEW_PDF}"$'\n'
+          else
+            echo "Warning: Original Thesis PDF not found, skipping rename."
+          fi
+
+          # 💡 5. トリム整形と GITHUB_ENV への一括マルチライン書き出し
+          # 末尾の余分な改行を削除
+          FINAL_PDF_LIST=$(echo "$FINAL_PDF_LIST" | sed '/^$/d')
+          FINAL_DOCX_LIST=$(echo "$FINAL_DOCX_LIST" | sed '/^$/d')
+
+          echo "IS_COMPILE_EXECUTED=true" >> $GITHUB_ENV
+
+          if [ -n "$FINAL_PDF_LIST" ]; then
+            echo "COMPILE_TARGET_PDFS<<EOF" >> $GITHUB_ENV
+            echo "$FINAL_PDF_LIST" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+            echo "HAS_PDF=true" >> $GITHUB_ENV
+          else
+            echo "HAS_PDF=false" >> $GITHUB_ENV
+          fi
+
+          # Docx リストを環境変数に書き出し
+          if [ -n "$FINAL_DOCX_LIST" ]; then
+            echo "COMPILE_TARGET_DOCXS<<EOF" >> $GITHUB_ENV
+            echo "$FINAL_DOCX_LIST" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+            echo "HAS_DOCX=true" >> $GITHUB_ENV
+          else
+            echo "HAS_DOCX=false" >> $GITHUB_ENV
+          fi
+        working-directory: ${{ github.workspace }}
+
+      - name: Upload All Compiled Artifacts (PDF & Docx)
+        if: env.HAS_PDF == 'true' || env.HAS_DOCX == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: compiled-artifacts
+          path: |
+            ${{ env.COMPILE_TARGET_PDFS }}
+            ${{ env.COMPILE_TARGET_DOCXS }}
+          if-no-files-found: ignore

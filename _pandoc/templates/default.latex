@@ -1,0 +1,319 @@
+$if(is-thesis)$
+% ==============================================================================
+% 論文用の設定 (is-thesis が真の場合)
+% ==============================================================================
+\documentclass[autodetect-engine,ja=standard,oneside,11pt,a4paper]{bxjsbook}
+
+\usepackage{geometry}
+\usepackage{setspace}
+
+% 行間の調整
+\setstretch{1.2} 
+
+\geometry{
+  truedimen,
+  top=15truemm,       % 上余白：30mm
+  bottom=15truemm,    % 下余白：30mm
+  left=35truemm,      % 左余白：製本用の綴じ代を含めて35mm
+  footskip=10truemm,  % 本文とページ番号の間隔
+  right=25truemm,
+}
+
+\renewenvironment{abstract}{%
+  \par\vspace{\baselineskip}
+}{}
+
+\pagestyle{plain}
+
+% ページ下部を不揃いにせず、可能な限り美しく底面を揃える設定
+\flushbottom
+
+$elseif(is-prospectus)$
+% ==============================================================================
+% 構想用の設定 (is-prospectus が真の場合)
+% ==============================================================================
+\documentclass[autodetect-engine,ja=standard,11pt,a4paper]{bxjsarticle}
+\geometry{truedimen,top=25truemm,bottom=20truemm,hmargin=25truemm}
+\usepackage{setspace}
+\setstretch{1.2}
+
+\usepackage{fancyhdr}
+
+\fancypagestyle{memostyle}{
+  \fancyhf{}
+  
+  % --- ヘッダーの設定 ---
+  \fancyhead[C]{\small $year$}
+  \fancyhead[R]{\small 学籍番号:$student_id$ $author$}
+  
+  % --- フッターの設定 ---
+  \fancyfoot[C]{\small \thepage}
+  
+  % --- 線の設定 ---
+  \renewcommand{\headrulewidth}{0pt} % ヘッダー下の線の太さ（0ptにすると線が消えます）
+  \renewcommand{\footrulewidth}{0pt} % フッター上の線は無し
+}
+\pagestyle{memostyle}
+$else$
+% ==============================================================================
+% 通常のドキュメント (デフォルトの設定)
+% ==============================================================================
+\documentclass[autodetect-engine,ja=standard,11pt,a4paper]{bxjsarticle}
+\geometry{truedimen,top=48truemm,bottom=15truemm,width=40\zw,centering}
+\setlength\footskip{10truemm}
+\usepackage{setspace}
+\setstretch{2} % ページ全体の行間を設定
+\pagestyle{plain}
+$endif$
+
+% --- 必須パッケージ群 ---
+\usepackage{graphicx} % 画像の最大幅制御などに必須
+\usepackage{etoolbox} % \patchcmd や \apptocmd のために必須
+\usepackage{longtable}
+\newcounter{none}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{calc}
+\usepackage{amssymb}
+
+\usepackage[utf8]{inputenc}
+\usepackage{atbegshi}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[normalem]{ulem}
+
+\usepackage{hyperref}
+\hypersetup{ % ハイパーリンクの設定
+  pdfborder={0 0 0},
+}
+\usepackage{bookmark}
+
+\usepackage[american]{babel}
+\usepackage{csquotes}
+\usepackage{url}
+
+\usepackage{$bibstyle$}
+$if(bibliography)$
+\addbibresource{$bibliography$}
+$endif$
+
+\usepackage{endnotesj}
+$if(is-thesis)$
+$else$
+\renewcommand{\footnote}{\endnote} % footnote を endnote として使う
+\renewcommand{\notesname}{註} % Notes を註に変更する
+$endif$
+\renewcommand{\figurename}{図.}
+\renewcommand{\tablename}{表.}
+\def\tightlist{}
+
+\usepackage{bxwareki} % 日付を日本語で表示
+
+\makeatletter
+
+$if(is-thesis)$
+% 論文モード（is-thesis: true）の場合：chapter を使用
+\renewcommand{\thechapter}{\arabic{chapter}}
+\renewcommand{\thesection}{%
+  \ifnum\value{chapter}>0 \thechapter.\fi\arabic{section}%
+}
+\renewcommand{\thesubsection}{\thesection.\arabic{subsection}}
+\renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}
+\@addtoreset{endnote}{chapter} % 章毎のカウンタリセット
+\def\enoteheading{\chapter*{\notesname}%
+  \@mkboth{\MakeUppercase{\notesname}}{\MakeUppercase{\notesname}}%
+  \addcontentsline{toc}{chapter}{\notesname}%
+  \mbox{}\par\vskip-\baselineskip}
+$elseif(is-prospectus)$
+% 構想モード（is-prospectus: true）の場合：subsubsection の番号表示を「番号のみ」にする
+\newcommand{\circlednumber}[1]{%
+  \ifcase#1\or ①\or ②\or ③\or ④\or ⑤\or ⑥\or ⑦\or ⑧\or ⑨\or ⑩\or ⑪\or ⑫\or ⑬\or ⑭\or ⑮\or ⑯\or ⑰\or ⑱\or ⑲\or ⑳\else #1\fi
+}
+\renewcommand{\thesubsubsection}{\circlednumber{\value{subsubsection}}}
+$else$
+% レポートモード（is-thesis: false）の場合：section を使用
+\def\enoteheading{\section*{\notesname}%
+  \@mkboth{\MakeUppercase{\notesname}}{\MakeUppercase{\notesname}}%
+  \addcontentsline{toc}{section}{\notesname}%
+  \mbox{}\par\vskip-\baselineskip}
+$endif$
+
+% 後注・脚注の書式変更
+\renewcommand{\notesname}{本文註}
+\patchcmd{\enoteformat}{1.8em}{0pt}{}{}
+
+% 画像の最大幅制御マクロ
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\makeatother
+
+\usepackage{amssymb}
+
+$if(title)$
+\title{$title$$if(thanks)$\thanks{$thanks$}$endif$}
+$endif$
+
+$if(subtitle)$
+\makeatletter
+\providecommand{\subtitle}[1]{%% add subtitle to \maketitle
+\apptocmd{\@title}{\par {\large #1 \par}}{}{}
+}
+\makeatother
+\subtitle{$subtitle$}
+$endif$
+
+$if(is-thesis)$
+\author{$department$ \\ 学籍番号: $student_id$ \\ $for(author)$$author$$sep$ \and $endfor$ \\ \\ 指導教員 $supervisor$}
+\date{$date$ \linebreak $version$}
+$else$
+\author{$author$}
+\date{$date$}
+$endif$
+
+\makeatletter
+\newcommand{\printbibifexists}{%
+  % Pandoc側でbibliographyが指定されている場合のみ出力
+  $if(bibliography)$
+    $if(is-thesis)$
+    \chapter*{$biblio-title$}
+    \addcontentsline{toc}{chapter}{$biblio-title$}
+    $else$
+    \section*{$biblio-title$}
+    \addcontentsline{toc}{section}{$biblio-title$}
+    $endif$
+    \printbibliography[heading=none]
+  $endif$
+}
+\makeatother
+
+\begin{document}
+
+$if(has-frontmatter)$
+\frontmatter
+$endif$
+
+$if(title)$
+$if(is-thesis)$
+\begin{titlepage}
+    \centering
+    \vspace{1em}
+    {\LARGE $year$ \par} % ここに年度を大きく表示
+    \vspace*{\fill} % 上部にスペースを入れる
+
+    {\Huge $title$ \par} % タイトル
+    \vspace{2em}
+    {\LARGE $subtitle$ \par} % サブタイトル
+    \vspace{2em}
+    {\Large $date$ $version$ \par} % バージョン
+
+    \vspace*{\fill} % 下部にスペースを入れる
+    {\Large $department$ \par} % 学部
+    \vspace{2em}
+    {\Large 学籍番号　$student_id$ \par} % 学籍番号
+    \vspace{2em}
+    {\Large $author$ \par} % 著者
+    \vspace{2em}
+    {\Large 指導教員　$supervisor$ \par} % 指導教員
+    \vspace{5em}
+\end{titlepage}
+$elseif(is-prospectus)$
+\subsubsection{卒業論文題目}
+「$title$ ---$subtitle$---」
+$else$
+\maketitle
+$endif$
+$endif$
+
+$if(abstract)$
+\begin{abstract}
+\begin{center}
+{\LARGE 要旨 \par}
+\end{center}
+$abstract$
+\end{abstract}
+$endif$
+
+$if(toc)$
+$if(toc-title)$
+\renewcommand*\contentsname{$toc-title$}
+$endif$
+%\addcontentsline{toc}{Chapter}{$toc-title$}
+$if(beamer)$
+\begin{frame}[allowframebreaks]
+$if(toc-title)$
+\frametitle{$toc-title$}
+$endif$
+\tableofcontents[hideallsubsections]
+\end{frame}
+$else$
+{
+$if(colorlinks)$
+\hypersetup{linkcolor=$if(toccolor)$$toccolor$$else$$endif$}
+$endif$
+\setcounter{tocdepth}{$toc-depth$}
+\tableofcontents
+}
+$endif$
+$endif$
+
+$if(lof)$
+\listoffigures
+$endif$
+$if(lot)$
+\listoftables
+$endif$
+$if(linestretch)$
+\setstretch{$linestretch$}
+$endif$
+
+$for(include-before)$
+$include-before$
+$endfor$
+
+$if(has-frontmatter)$
+\mainmatter
+$endif$
+
+$body$
+
+$if(has-frontmatter)$
+\backmatter
+\newpage
+$endif$
+
+$if(is-thesis)$
+$elseif(is-prospectus)$
+$else$
+\newpage
+\begingroup
+\parindent 0pt 
+\parskip 2ex 
+\def\enotesize{\normalsize}
+\makeatletter
+\@ifundefined{theendnotes}{}{%
+  \if@enotesopen \theendnotes \fi
+}
+\makeatother
+\endgroup
+$endif$
+
+$if(referenceall)$
+\nocite{*}
+$endif$
+
+$if(is-prospectus)$
+% --- 参考文献一覧の出力部分 ---
+\subsubsection{入手済み、または入手予定の参考文献・資料等}
+\printbibliography[keyword=unread, heading=none]
+\subsubsection{読了した参考文献・資料等}
+\printbibliography[keyword=read, heading=none]
+$else$
+\printbibifexists
+$endif$
+
+$if(include-after)$
+$for(include-after)$
+$include-after$
+$endfor$
+$endif$
+
+\end{document}

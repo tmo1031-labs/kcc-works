@@ -1,0 +1,12 @@
+
+# --- Type ガイド ---
+# <type>[optional scope]: <description>
+# :sparkles:feat		: 新機能
+# :bug:fix			: バグ修正
+# :memo:docs			: ドキュメントのみ
+# :art:style			: コードの動作に影響しない修正
+# :recycle:refactor		: 仕様変更を伴わないコード整理
+# :white_check_mark:test	: テストの追加・修正
+# :wrench:chore			: ビルド、設定、ライブラリ更新など
+# :bulb:log			: 日常記録
+# ------------------
